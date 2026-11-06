@@ -1,0 +1,34 @@
+import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+test('previews CSV errors and exports only valid rows without network writes', async ({ page }) => {
+  const writes: string[] = [];
+  page.on('request', request => { if (!['GET','HEAD'].includes(request.method())) writes.push(request.url()); });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Load CSV sample' }).click();
+  await page.getByRole('button', { name: 'Validate CSV', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('2 valid · 1 rejected');
+  await expect(page.getByRole('region', { name: 'CSV errors' })).toContainText('Line 4');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download valid JSON' }).click();
+  const output = await download;
+  expect(output.suggestedFilename()).toBe('validated-requests.json');
+  const data = JSON.parse(await readFile((await output.path())!, 'utf8'));
+  expect(data).toHaveLength(2); expect(data[0].affectedItems).toBe(2); expect(writes).toEqual([]);
+  await page.locator('app-csv-import').screenshot({ path: 'evidence/csv-desktop.png' });
+  await page.getByLabel('Or paste CSV text').fill('edited');
+  await expect(page.getByRole('button', { name: 'Download valid JSON' })).toHaveCount(0);
+});
+test('uploads a CSV on mobile and rejects oversized files', async ({ page }) => {
+  await page.setViewportSize({ width:390, height:844 }); await page.goto('/');
+  const upload = page.getByLabel('Choose a CSV file');
+  await upload.setInputFiles({ name:'sample.csv', mimeType:'text/csv', buffer:Buffer.from('title;email;affectedItems;details\nFix mobile view;demo@example.test;2;The footer overlaps the button.') });
+  await expect(page.getByLabel('Or paste CSV text')).toHaveValue(/Fix mobile view/);
+  await expect(page.getByRole('button', { name:'Validate CSV', exact:true })).toBeEnabled();
+  await page.getByRole('button', { name:'Validate CSV', exact:true }).click();
+  await expect(page.getByRole('status')).toHaveText('1 valid · 0 rejected');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.locator('app-csv-import').screenshot({ path:'evidence/csv-mobile.png' });
+  await upload.setInputFiles({ name:'large.csv', mimeType:'text/csv', buffer:Buffer.alloc(200001, 65) });
+  await expect(page.getByRole('alert')).toContainText('200,000 bytes');
+  await expect(page.getByRole('button', { name:'Download valid JSON' })).toHaveCount(0);
+});

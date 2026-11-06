@@ -1,0 +1,9 @@
+{
+  "verifiedAtUtc": "2026-11-06T10:30:18.938Z",
+  "sourceVersion": "2.0.0",
+  "environment": "Windows, Node.js 24, headless Google Chrome",
+  "browserTestsPassed": 5,
+  "browserTestsFailed": 0,
+  "unitTestsPassed": 7,
+  "scope": "Synthetic local demonstration; mobile viewport emulation; no production deployment."
+}
